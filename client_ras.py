@@ -89,6 +89,7 @@ def run(clientsocket):
     # 连接服务器的ip地址
     send_data(clientsocket)
     clientsocket.close()
+    print(1)
     # load_data()
     # 断开采集板的ip地址
 
