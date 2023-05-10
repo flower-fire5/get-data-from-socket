@@ -6,7 +6,7 @@ import schedule
 
 #39.101.139.227
 host_name="39.101.139.227" #服务器的ip地址
-port_num=30004  #端口号
+port_num=30003  #端口号
 
 
 word = 'auto'

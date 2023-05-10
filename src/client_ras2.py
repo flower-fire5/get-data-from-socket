@@ -3,7 +3,22 @@ import threading
 import time
 import os
 import schedule
-from load_data import load_data
+
+
+"""
+程序设计思路：
+1.与服务器建立连接
+2.向服务器发送“ras”指令
+3.等待接收”collect“指令
+4.接收到“collect”指令后开始运行采集数据程序
+5.首先连接到单片机的sever
+6.持续发送采集数据的指令
+7.接收单片机的回应
+8.接收到单片机的回应后开始recv数据
+9.到时间停止接收
+10.转发数据
+
+"""
 
 
 data_host_name="192.168.0.36" #采集板的ip地址
@@ -14,9 +29,11 @@ net_port_num=30003  #端口号
 
 def tcplink(sock, addr):
     filename = "data.txt"
+    filename2 = "data2.txt"
     if os.path.exists(filename):
         os.remove(filename)  # 若新文件名与系统中已经存在的文件重名，则删除系统中的文件
-
+    if os.path.exists(filename2):
+        os.remove(filename2)  # 若新文件名与系统中已经存在的文件重名，则删除系统中的文件
     new_file = open(filename, "ab")
     # new_file2 = open(filename2, "a")
     print('Accept new connection from %s:%s...' % addr)
@@ -49,15 +66,30 @@ def tcplink(sock, addr):
     print('Connection from %s:%s closed.' % addr)
     return 123
 
-def get_data(dataseversocket):
+def get_data(dataclientsocket):
     #从采集板获得数据。获得一分钟的数据
     # 将数据进行打包，存储为txt文件
+    filename = "data.txt"
+    if os.path.exists(filename):
+        os.remove(filename)  # 若新文件名与系统中已经存在的文件重名，则删除系统中的文件
+    new_file = open(filename, "ab")
+    DATA = []
+    start = time.time()
+    k = 0
     while True:
-        sock, addr = dataseversocket.accept()
-        # 创建新线程来处理TCP连接:
-        k = tcplink(sock, addr)
-        if k == 123:
+        data = dataclientsocket.recv(1024)
+        k=k+1
+        DATA.append(data)
+        if not data:
             break
+        end=time.time()
+        if (end-start)>61:
+            break
+    print(k)
+    for everydata in DATA:
+        new_file.write(everydata)
+    new_file.close()
+    print('all data have been received ')
 
 def send_data(clientsocket):
     #将数据通过公网ip进行传输
@@ -73,24 +105,30 @@ def send_data(clientsocket):
 def run(clientsocket):
     print("----------开始采集数据---------------")
     # 连接采集板的ip地址
-    dataseversocket = socket(AF_INET, SOCK_STREAM)
-    dataseversocket.bind((data_host_name, data_port_num))
-    dataseversocket.listen(5)
-    print("--------datasever is connected---------")
-    get_data(dataseversocket)
+    dataclientsocket = socket(AF_INET, SOCK_STREAM)
+    while True:
+        try:
+            dataclientsocket.connect((data_host_name, data_port_num))
+            print("--------datasever is connected---------")
+            dataclientsocket.send('$ASKD,060AB'.encode('ASCII')) #采集数据的命令格式“$ASKD,[采集时间][校验码]”
+        except:
+            print("connection with datasever is failed,please inspect sever and try again")
+            time.sleep(1)
+            continue
+        if clientsocket.recv(1024).decode('utf-8') == "RECV":
+            get_data(dataclientsocket)
+
     # 断开采集板的ip地址
-    dataseversocket.close()
+    dataclientsocket.close()
     print("--------数据采集已经完成------------")
     print("-------------------------------")
     time.sleep(5)
     # 连接服务器的ip地址
     send_data(clientsocket)
     clientsocket.close()
-    # load_data()
-    # 断开采集板的ip地址
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     while True:
         clientsocket = socket(AF_INET, SOCK_STREAM)
         try:
@@ -103,4 +141,3 @@ if __name__ == '__main__':
             continue
         if clientsocket.recv(1024).decode('utf-8') == "collect":
             run(clientsocket)
-
